@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenSphere Nexus</title>
+<style>
+  body { font-family: Arial, sans-serif; margin:0; background:#121212; color:#fff; }
+  header { background:#1f1f1f; padding:15px; text-align:center; font-size:1.5em; }
+  #newPost { margin:15px; }
+  #newPost input, #newPost textarea, #newPost select { width:100%; border-radius:8px; padding:8px; margin-top:5px; border:none; }
+  #newPost button { margin-top:5px; padding:8px 12px; border-radius:5px; border:none; background:#4caf50; color:white; cursor:pointer; }
+  #filter { margin:15px; }
+  #feed { margin:15px; }
+  .post { background:#1e1e1e; padding:12px; margin-bottom:12px; border-radius:8px; }
+  .post img { max-width:100%; border-radius:8px; margin-top:8px; }
+  .likes-comments { margin-top:8px; display:flex; gap:12px; font-size:0.9em; cursor:pointer; }
+  .comment-section { margin-top:8px; }
+  .comment { margin-bottom:5px; font-size:0.85em; color:#ccc; }
+  .comment input { width:80%; border-radius:5px; border:none; padding:5px; }
+  .comment button { padding:5px 8px; border-radius:5px; border:none; background:#2196f3; color:white; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<header>OpenSphere Nexus</header>
+
+<div id="newPost">
+  <textarea id="postText" placeholder="What's happening?"></textarea>
+  <input type="text" id="postImage" placeholder="Image URL (optional)">
+  <select id="postTag">
+    <option value="General">General</option>
+    <option value="Music">Music</option>
+    <option value="Tech">Tech</option>
+    <option value="Events">Events</option>
+  </select>
+  <button onclick="addPost()">Post</button>
+</div>
+
+<div id="filter">
+  <label>Filter by tag: </label>
+  <select id="filterTag" onchange="renderFeed()">
+    <option value="All">All</option>
+    <option value="General">General</option>
+    <option value="Music">Music</option>
+    <option value="Tech">Tech</option>
+    <option value="Events">Events</option>
+  </select>
+</div>
+
+<div id="feed"></div>
+
+<script>
+// --- CONFIG ---
+// Replace with your JSONBin details for persistence
+const JSONBIN_URL = "https://api.jsonbin.io/v3/b/YOUR_BIN_ID"; 
+const JSONBIN_KEY = "YOUR_SECRET_KEY";
+
+let posts = [];
+
+// Fetch posts from backend
+async function fetchPosts() {
+  try {
+    const res = await fetch(JSONBIN_URL, {
+      headers: { "X-Master-Key": JSONBIN_KEY }
+    });
+    const data = await res.json();
+    posts = data.record.posts || [];
+    renderFeed();
+  } catch (err) { console.error(err); }
+}
+
+// Save posts to backend
+async function savePosts() {
+  try {
+    await fetch(JSONBIN_URL, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_KEY
+      },
+      body: JSON.stringify({ posts })
+    });
+  } catch (err) { console.error(err); }
+}
+
+// Add a new post
+function addPost() {
+  const text = document.getElementById('postText').value.trim();
+  const imageUrl = document.getElementById('postImage').value.trim();
+  const tag = document.getElementById('postTag').value || 'General';
+  if (!text && !imageUrl) return alert('Please add text or image!');
+  const post = { id: Date.now(), text, image: imageUrl || null, likes:0, comments:[], tag };
+  posts.unshift(post);
+  document.getElementById('postText').value = '';
+  document.getElementById('postImage').value = '';
+  renderFeed();
+  savePosts();
+}
+
+// Like a post
+function likePost(id) {
+  const post = posts.find(p => p.id === id);
+  post.likes++;
+  renderFeed();
+  savePosts();
+}
+
+// Add a comment
+function addComment(postId, inputId) {
+  const input = document.getElementById(inputId);
+  const text = input.value.trim();
+  if (!text) return;
+  const post = posts.find(p => p.id === postId);
+  post.comments.push({ username: 'You', text });
+  input.value = '';
+  renderFeed();
+  savePosts();
+}
+
+// Render feed
+function renderFeed() {
+  const feed = document.getElementById('feed');
+  feed.innerHTML = '';
+  const filter = document.getElementById('filterTag').value;
+  let filteredPosts = posts;
+  if (filter !== 'All') filteredPosts = posts.filter(p => p.tag === filter);
+  filteredPosts.forEach(post => {
+    const div = document.createElement('div');
+    div.className = 'post';
+    div.innerHTML = `
+      <div>${post.text}</div>
+      ${post.image ? `<img src="${post.image}" />` : ''}
+      <div class="likes-comments">
+        <span onclick="likePost(${post.id})">❤️ ${post.likes}</span>
+      </div>
+      <div class="comment-section">
+        ${post.comments.map(c => `<div class="comment">${c.username}: ${c.text}</div>`).join('')}
+        <input type="text" id="input-${post.id}" placeholder="Add a comment">
+        <button onclick="addComment(${post.id}, 'input-${post.id}')">Post</button>
+      </div>
+    `;
+    feed.appendChild(div);
+  });
+}
+
+// Initial fetch and auto-refresh every 5s
+fetchPosts();
+setInterval(fetchPosts, 5000);
+</script>
+
+</body>
+</html>
